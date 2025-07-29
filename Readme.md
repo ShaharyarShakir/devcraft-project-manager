@@ -23,5 +23,13 @@ DevCrafe is a powerful interactive CLI tool that scaffolds universal project set
 ### 🔧 Global Installation via `curl`
 
 ```bash
-sudo curl -fsSL https://raw.githubusercontent.com/<your-username>/devcrafe/main/devcrafe.sh -o /usr/local/bin/devcrafe
+sudo curl -fsSL https://raw.githubusercontent.com/ShaharyarShakir/devcraft-project-manager/main/devcraft.sh -o /usr/local/bin/devcrafe
 sudo chmod +x /usr/local/bin/devcrafe
+```
+
+### To Run Directly (without saving):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ShaharyarShakir/devcraft-project-manager/main/devcraft.sh)
+```
+
