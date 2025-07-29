@@ -23,10 +23,43 @@ install_if_missing() {
 }
 
 install_if_missing "devbox" 'curl -fsSL https://get.jetpack.io/devbox | bash && sudo mv devbox /usr/local/bin/'
+# 📦 Install gum via devbox global
 if ! command -v gum &>/dev/null; then
-	echo "📦 Installing gum globally using devbox..."
-	devbox global add gum
-	eval "$(devbox global shellenv)"
+  echo "📦 Installing gum globally using devbox..."
+  devbox global add gum
+
+  GLOB_ENV_CMD='eval "$(devbox global shellenv)"'
+
+  # Prompt user for their shell if we can’t detect config
+  echo ""
+  gum style --border rounded --padding "1 2" --border-foreground 214 --foreground 11 "🖥️  Devbox global not activated."
+
+  USER_SHELL=$(gum choose "bash" "zsh" "fish" "other")
+
+  case "$USER_SHELL" in
+    bash)   SHELL_RC="$HOME/.bashrc" ;;
+    zsh)    SHELL_RC="$HOME/.zshrc" ;;
+    fish)   SHELL_RC="$HOME/.config/fish/config.fish" ;;
+    other)
+      SHELL_RC=$(gum input --placeholder "Enter path to your shell config file (e.g. ~/.config/nu/config.fish)")
+      ;;
+  esac
+
+  # Check if the shellenv line is already in the file
+  if ! grep -qF "$GLOB_ENV_CMD" "$SHELL_RC" 2>/dev/null; then
+    echo "$GLOB_ENV_CMD" >> "$SHELL_RC"
+    gum style --foreground 10 --border rounded --padding "1 2" \
+      "✅ Added devbox global shellenv to $SHELL_RC
+
+Please restart your terminal or run:
+$GLOB_ENV_CMD"
+  else
+    gum style --foreground 11 --border rounded --padding "1 2" \
+      "ℹ️  Devbox shellenv is already configured in $SHELL_RC"
+  fi
+
+  # Activate for current session
+  eval "$GLOB_ENV_CMD"
 fi
 
 # 🧢 Branding
