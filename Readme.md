@@ -1,6 +1,8 @@
 # 🚀 DevCrafe Project Manager
 
-**DevCrafe** is an interactive CLI tool built with **Devbox** and **Gum** to instantly scaffold modern frontend and backend projects. It helps developers set up tools, frameworks, and environments using a friendly, branded terminal experience.
+**DevCrafe** is an interactive CLI tool built with [**Devbox**](https://www.jetpack.io/devbox/) and [**Gum**](https://github.com/charmbracelet/gum) to instantly scaffold modern **frontend** and **backend** projects.
+
+It helps developers set up tools, frameworks, and environments using a friendly, branded terminal experience — all while keeping the setup **fully isolated from your operating system** using Devbox.
 
 ---
 
