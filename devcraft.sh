@@ -1,282 +1,142 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
-# 📦 Handle "update" command
-if [[ "${1:-}" == "update" ]]; then
-	echo "🔄 Updating DevCrafe CLI..."
-
-	curl -fsSL https://raw.githubusercontent.com/ShaharyarShakir/devcraft-project-manager/main/devcraft.sh |
-		sudo tee /usr/local/bin/devcrafe >/dev/null
-
-	sudo chmod +x /usr/local/bin/devcrafe
-
-	echo "✅ DevCrafe successfully updated!"
-	exit 0
-fi
-# 🛠 Auto-install if missing
-install_if_missing() {
-	local cmd=$1
-	local install_cmd=$2
-	if ! command -v "$cmd" &>/dev/null; then
-		echo "🔧 Installing $cmd..."
-		eval "$install_cmd"
-	fi
-}
-
-install_if_missing "devbox" 'curl -fsSL https://get.jetpack.io/devbox | bash && sudo mv devbox /usr/local/bin/'
-# 📦 Install gum via devbox global
-if ! command -v gum &>/dev/null; then
-	echo "📦 Installing gum globally using devbox..."
-	devbox global add gum
-
-	GLOB_ENV_CMD='eval "$(devbox global shellenv)"'
-
-	# Prompt user for their shell if we can’t detect config
-	echo ""
-	gum style --border rounded --padding "1 2" --border-foreground 214 --foreground 11 "🖥️  Devbox global not activated."
-
-	USER_SHELL=$(gum choose "bash" "zsh" "fish" "other")
-
-	case "$USER_SHELL" in
-	bash) SHELL_RC="$HOME/.bashrc" ;;
-	zsh) SHELL_RC="$HOME/.zshrc" ;;
-	fish) SHELL_RC="$HOME/.config/fish/config.fish" ;;
-	other)
-		SHELL_RC=$(gum input --placeholder "Enter path to your shell config file (e.g. ~/.config/nu/config.fish)")
-		;;
-	esac
-
-	# Check if the shellenv line is already in the file
-	if ! grep -qF "$GLOB_ENV_CMD" "$SHELL_RC" 2>/dev/null; then
-		echo "$GLOB_ENV_CMD" >>"$SHELL_RC"
-		gum style --foreground 10 --border rounded --padding "1 2" \
-			"✅ Added devbox global shellenv to $SHELL_RC
-
-Please restart your terminal or run:
-$GLOB_ENV_CMD"
-	else
-		gum style --foreground 11 --border rounded --padding "1 2" \
-			"ℹ️  Devbox shellenv is already configured in $SHELL_RC"
-	fi
-
-	# Activate for current session
-	eval "$GLOB_ENV_CMD"
-fi
 
 # 🧢 Branding
-gum style \
-	--border double \
-	--margin "1" \
-	--padding "1 2" \
-	--foreground 12 \
+gum style --border double --margin "1" --padding "1 2" --foreground 12 \
 	"🚀 DevCrafe Project Manager
 Created by Shaharyar"
 
-# 📁 Project Path
-PROJECT_PATH=$(gum input --placeholder "Enter full path (leave blank for current dir)")
-[[ -n "$PROJECT_PATH" ]] && mkdir -p "$PROJECT_PATH" && cd "$PROJECT_PATH"
-
-# 📦 Project Name
+# 📁 Project name
 while true; do
 	PROJECT_NAME=$(gum input --placeholder "Enter your project name")
 	[[ -n "$PROJECT_NAME" ]] && break
-	gum style --foreground 196 --border rounded --padding "1 2" "⚠️ Project name cannot be empty."
-done
-mkdir "$PROJECT_NAME"
-cd "$PROJECT_NAME"
-
-# 📂 Category
-while true; do
-	CATEGORY=$(gum choose "Web" "Mobile" "DataScience" "DevOps" || true)
-	[[ -n "$CATEGORY" ]] && break
-	gum style --foreground 196 --border rounded --padding "1 2" "⚠️ You must select a category."
+	gum style --foreground 196 --padding "1 2" "⚠️ Project name is required."
 done
 
-# 🟡 Minimal setup
-if gum confirm "Skip setup and just create folders/files?"; then
-	if gum confirm "Create folders?"; then
-		FOLDER_NAMES=$(gum input --placeholder "e.g. src assets public" | xargs)
-		for folder in $FOLDER_NAMES; do mkdir -p "$folder"; done
-	fi
-	if gum confirm "Create files?"; then
-		FILE_NAMES=$(gum input --placeholder "e.g. README.md index.js" | xargs)
-		for file in $FILE_NAMES; do touch "$file"; done
-	fi
-	if gum confirm "Initialize Git repository?"; then git init; fi
-	echo "# $PROJECT_NAME" >README.md
-	gum style --border double --padding "1 2" --foreground 10 --border-foreground 112 "✅ Minimal project created."
-	exit 0
-fi
+mkdir "$PROJECT_NAME" && cd "$PROJECT_NAME"
 
-# 🧠 Language
-case "$CATEGORY" in
-Web) LANGUAGE=$(gum choose "JavaScript" "TypeScript" "Python" "Go" "Rust") ;;
-Mobile) LANGUAGE=$(gum choose "React Native" "Flutter" "Kotlin") ;;
-DataScience) LANGUAGE="Python" ;;
-DevOps) LANGUAGE=$(gum choose "Python" "Go" "Rust" "Shell") ;;
-esac
-
-# ⚙️ Framework
-FRAMEWORK="None"
-PACKAGE_MANAGER=""
-USE_EXPO=""
-if gum confirm "Do you want to use a framework?"; then
-	case "$CATEGORY" in
-	Web)
-		STACK=$(gum choose "Frontend" "Backend" "Fullstack" "None")
-		case "$STACK" in
-		Frontend) FRAMEWORK=$(gum choose "React" "Vue" "Svelte" "Angular" "None") ;;
-		Backend) FRAMEWORK=$(gum choose "Express" "Fastify" "Hono" "None") ;;
-		Fullstack) FRAMEWORK=$(gum choose "Next.js" "SvelteKit" "Nuxt" "None") ;;
-		esac
-		[[ "$FRAMEWORK" != "None" ]] && PACKAGE_MANAGER=$(gum choose "npm" "pnpm" "bun" "yarn")
-		;;
-	Mobile)
-		FRAMEWORK=$(gum choose "React Native" "Flutter" "Kotlin" "None")
-		[[ "$FRAMEWORK" == "React Native" ]] && USE_EXPO=$(gum choose "Expo" "Bare React Native") && FRAMEWORK="React Native ($USE_EXPO)"
-		;;
-	esac
-fi
-
-# 💾 Databases
-DATABASES=$(gum choose --no-limit "None" "PostgreSQL" "MongoDB" "MySQL" "SQLite" "Redis")
-
-# 🛠 Git Setup
-USE_GIT=false
-PUSH_REMOTE=false
-GIT_PROVIDER="None"
-if gum confirm "Initialize Git?"; then
-	USE_GIT=true
-	git init
-	if gum confirm "Push to remote?"; then
-		PUSH_REMOTE=true
-		GIT_PROVIDER=$(gum choose "GitHub" "GitLab" "Bitbucket" "Other")
-	fi
-fi
-
-# 📦 Devbox Packages
-DEVBOX_PACKAGES=()
-case "$LANGUAGE" in
-JavaScript | TypeScript) DEVBOX_PACKAGES+=("nodejs") ;;
-Python) DEVBOX_PACKAGES+=("python" "uv") ;;
-Go) DEVBOX_PACKAGES+=("go") ;;
-Rust) DEVBOX_PACKAGES+=("rust") ;;
-Flutter) DEVBOX_PACKAGES+=("flutter") ;;
-Kotlin) DEVBOX_PACKAGES+=("kotlin") ;;
-esac
-case "$PACKAGE_MANAGER" in
-pnpm) DEVBOX_PACKAGES+=("pnpm") ;;
-bun) DEVBOX_PACKAGES+=("bun") ;;
-yarn) DEVBOX_PACKAGES+=("yarn") ;;
-esac
-
-# ➕ Extra Devbox packages
-if gum confirm "Add extra devbox packages?"; then
-	EXTRA=$(gum input --placeholder "e.g. jq git curl" | xargs)
-	[[ -n "$EXTRA" ]] && DEVBOX_PACKAGES+=($EXTRA)
-fi
-
-# ➕ PM install
-PM_PACKAGES=()
-if [[ -n "$PACKAGE_MANAGER" ]] && gum confirm "Add extra $PACKAGE_MANAGER packages (not installed now)?"; then
-	PM_PACKAGES=($(gum input --placeholder "e.g. axios lodash" | xargs))
-fi
-
-# 💾 DB support
-DB_PACKAGES=()
-for db in $DATABASES; do
-	case "$db" in
-	PostgreSQL) DB_PACKAGES+=("postgresql") ;;
-	MySQL) DB_PACKAGES+=("mysql") ;;
-	MongoDB) DB_PACKAGES+=("mongodb") ;;
-	SQLite) DB_PACKAGES+=("sqlite") ;;
-	Redis) DB_PACKAGES+=("redis") ;;
-	esac
-done
-
-# ⏳ Ask to install now or later
-INSTALL_NOW=false
-if gum confirm "Install dependencies now?"; then INSTALL_NOW=true; fi
-
-# 🔧 Devbox Init + Packages
-gum style --border double --padding "1 4" --margin "1" --foreground 205 --border-foreground 212 "📦 Installing Devbox Packages"
+# 📦 Initialize Devbox
 gum spin --title "Initializing Devbox..." -- devbox init
+devbox add git github-cli
 
-for pkg in "${DEVBOX_PACKAGES[@]}"; do
-	gum spin --title "Adding $pkg to Devbox..." -- devbox add "$pkg"
-done
-for db in "${DB_PACKAGES[@]}"; do
-	gum spin --title "Adding DB: $db..." -- devbox add "$db"
-done
+# 📦 Choose package manager
+PACKAGE_MANAGER=$(gum choose "npm" "pnpm" "yarn")
+if [[ "$PACKAGE_MANAGER" == "npm" ]]; then
+	devbox add nodejs
+else
+	devbox add "$PACKAGE_MANAGER"
+fi
 
-# 🏗️ Scaffolding
-gum spin --title "Scaffolding ($FRAMEWORK)..." -- bash -c "
-case \"$FRAMEWORK\" in
-  React | Vue | Svelte | Angular)
-    npm create vite@latest . -- --template ${FRAMEWORK,,}
-    [[ \"$INSTALL_NOW\" == true ]] && $PACKAGE_MANAGER install || echo '📦 Skipped installing dependencies'
-    ;;
-  Express | Fastify)
-    mkdir src && echo 'console.log(\"Hello $FRAMEWORK\")' > src/index.js
-    npm init -y
-    echo '📦 Skipped installing $FRAMEWORK modules'
-    ;;
-  Hono)
-    npm init -y
-    echo '📦 Skipped installing hono'
-    ;;
-  Next.js)
-    $PACKAGE_MANAGER create next-app@latest . -- --typescript --no-install
-    ;;
-  SvelteKit)
-    npm create svelte@latest .
-    ;;
-  Nuxt)
-    npx nuxi init .
-    ;;
-  React\ Native\ \(*)*)
-    [[ \"$USE_EXPO\" == \"Expo\" ]] && npx create-expo-app@latest . --no-install || echo 'Skipped bare React Native init'
-    ;;
-  Flutter)
-    flutter create .
-    ;;
-  Kotlin*)
-    mkdir -p app/src/main/java/com/example
-    echo 'fun main() = println(\"Hello Kotlin\")' > app/src/main/java/com/example/Main.kt
-    ;;
-esac
-"
+# 🧱 Choose frontend framework
+FRONTEND=$(gum choose "react" "vue" "svelte")
 
-# 📘 README and .gitignore
+# 🔧 Scaffold frontend project
+gum style --padding "1 2" --margin "1" --foreground 33 \
+	"📦 Scaffolding frontend project: $FRONTEND"
+
+mkdir frontend
+
+# Use correct vite create command based on package manager
+
+if [[ "$PACKAGE_MANAGER" != "npm" ]]; then
+	devbox run "$PACKAGE_MANAGER" create vite frontend -- --template "$FRONTEND"
+else
+	devbox run bash -c "npm create vite@latest frontend -- --template $FRONTEND"
+fi
+
+# 🧠 Backend setup
+
+
+if gum confirm "Do you want to add a backend?"; then
+	BACKEND=$(gum choose "Express.js" "Hono.js")
+	mkdir -p backend
+
+	# 🔧 Initialize backend (clean per-package-manager logic)
+	case "$PACKAGE_MANAGER" in
+		npm)
+			devbox run npm init -y --prefix backend
+			;;
+		yarn)
+			devbox run yarn init -y --cwd backend
+			;;
+		pnpm)
+			# pnpm does not support -y, run interactively in backend dir
+			(cd backend && devbox run pnpm init)
+			;;
+		bun)
+			devbox run bun init --yes --cwd backend
+			;;
+		*)
+			echo "⚠️ Unsupported package manager for init: $PACKAGE_MANAGER"
+			;;
+	esac
+
+	# 🧱 Choose package to install
+	case "$BACKEND" in
+		"Express.js") PKG_NAME="express" ;;
+		"Hono.js") PKG_NAME="hono" ;;
+		*) echo "⚠️ Unsupported backend"; exit 1 ;;
+	esac
+
+	# 📦 Install backend framework into backend/
+	case "$PACKAGE_MANAGER" in
+		npm | pnpm)
+			devbox run "$PACKAGE_MANAGER" add "$PKG_NAME" --prefix backend
+			;;
+		yarn | bun)
+			devbox run "$PACKAGE_MANAGER" add "$PKG_NAME" --cwd backend
+			;;
+		*)
+			echo "⚠️ Unsupported package manager for install: $PACKAGE_MANAGER"
+			;;
+	esac
+fi
+
+# 🛢️ Choose database(s)
+if gum confirm "Do you want to add a database?"; then
+	DBS=$(gum choose --no-limit "PostgreSQL" "MySQL" "MongoDB" "SQLite" "Redis")
+	for db in $DBS; do
+		case "$db" in
+		PostgreSQL) devbox add postgresql ;;
+		MySQL) devbox add mysql ;;
+		MongoDB) devbox add mongodb ;;
+		SQLite) devbox add sqlite ;;
+		Redis) devbox add redis ;;
+		esac
+	done
+fi
+
+# 📄 Create README + Gitignore
 echo "# $PROJECT_NAME" >README.md
-LANG_IGNORE=$(echo "$LANGUAGE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-curl -sL "https://www.toptal.com/developers/gitignore/api/$LANG_IGNORE" -o .gitignore || echo "# No .gitignore available" >.gitignore
+curl -sL "https://www.toptal.com/developers/gitignore/api/node" -o .gitignore || echo "# No .gitignore found" >.gitignore
 
-# 🐙 Push to Remote
-if [[ "$USE_GIT" == true && "$PUSH_REMOTE" == true ]]; then
+# 🐙 Git + GitHub Setup
+if gum confirm "Initialize Git repository?"; then
+	git init
 	git add .
 	git commit -m "Initial commit"
-	gh-create "$PROJECT_NAME"
-	git push -u origin main
+
+	if gum confirm "Create GitHub repo & push?"; then
+		gh repo create "$PROJECT_NAME" --private --source=. --remote=origin
+		git push -u origin main
+		gh browse
+	fi
 fi
 
 # ✅ Summary
-gum style \
-	--border double \
-	--border-foreground 212 \
-	--margin "1" \
-	--padding "1 2" \
-	--foreground 12 \
-	"✅ Project: $PROJECT_NAME
-📂 Category: $CATEGORY
-🧠 Language: $LANGUAGE
-🧱 Framework: $FRAMEWORK
-📦 Package Manager: ${PACKAGE_MANAGER:-None}
-📦 Devbox Packages: ${DEVBOX_PACKAGES[*]:-None}
-➕ PM Packages: ${PM_PACKAGES[*]:-None}
-💾 Databases: ${DATABASES:-None}
-📝 Files: README.md, .gitignore"
+gum style --border double --padding "1 2" --foreground 10 --border-foreground 112 \
+	"✅ $PROJECT_NAME Ready!
 
-# 🐚 Devbox Shell
-if gum confirm "Enter Devbox shell?"; then
+🧱 Frontend: $FRONTEND
+📦 Package Manager: $PACKAGE_MANAGER
+🧠 Backend: ${BACKEND:-None}
+💾 Database(s): ${DBS:-None}
+📁 Structure:
+  - frontend/
+  - backend/ (if selected)
+"
+
+# 🐚 Devbox shell
+if gum confirm "Enter Devbox shell now?"; then
 	exec devbox shell
 fi
